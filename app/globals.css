@@ -1,9 +1,15 @@
 @import "tailwindcss";
 
+@font-face{font-family:"ITF Qomra Arabic";src:url("/fonts/ITFQomraArabic-Light.otf") format("opentype");font-weight:300;font-style:normal;font-display:swap}
+@font-face{font-family:"ITF Qomra Arabic";src:url("/fonts/ITFQomraArabic-Regular.otf") format("opentype");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"ITF Qomra Arabic";src:url("/fonts/ITFQomraArabic-Medium.otf") format("opentype");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:"ITF Qomra Arabic";src:url("/fonts/ITFQomraArabic-Bold.otf") format("opentype");font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"ITF Qomra Arabic";src:url("/fonts/ITFQomraArabic-Black.otf") format("opentype");font-weight:900;font-style:normal;font-display:swap}
+
 :root { --ink:#17213a; --muted:#78839a; --line:#e8ebf2; --panel:#fff; --page:#f5f7fb; --primary:#5b3df5; --purple:#7357f7; --green:#16a36d; --danger:#e95e6a; }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
-body { margin:0; background:var(--page); color:var(--ink); font-family:Arial, Tahoma, sans-serif; }
+body { margin:0; background:var(--page); color:var(--ink); font-family:"ITF Qomra Arabic", Arial, Tahoma, sans-serif; }
 button, input, select { font:inherit; }
 button { cursor:pointer; }
 .app-shell { min-height:100vh; display:flex; background:var(--page); }

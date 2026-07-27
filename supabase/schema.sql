@@ -103,6 +103,17 @@ create table if not exists public.app_settings (
   id uuid primary key default gen_random_uuid(), key text not null unique, value text not null default '', description text, created_at timestamptz not null default now()
 );
 
+-- Forward-compatible upgrades for projects that ran the first schema version.
+alter table public.products add column if not exists image_url text;
+alter table public.products add column if not exists active boolean not null default true;
+alter table public.payments add column if not exists invoice_id uuid references public.invoices(id) on delete set null;
+alter table public.payments add column if not exists idempotency_key text;
+create unique index if not exists payments_idempotency_key_idx on public.payments (idempotency_key) where idempotency_key is not null;
+alter table public.finance_movements add column if not exists source_type text;
+alter table public.finance_movements add column if not exists source_id uuid;
+alter table public.finance_movements add column if not exists idempotency_key text;
+create unique index if not exists finance_movements_idempotency_key_idx on public.finance_movements (idempotency_key) where idempotency_key is not null;
+
 create index if not exists finance_movements_occurred_at_idx on public.finance_movements (occurred_at desc);
 create index if not exists members_status_idx on public.members (membership_status);
 create index if not exists subscriptions_member_status_idx on public.subscriptions (member_id, status, end_date);

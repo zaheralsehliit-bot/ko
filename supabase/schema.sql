@@ -137,12 +137,20 @@ create trigger validate_profit_shares_trigger before insert or update on public.
 -- Atomic checkout: locks stock, records a sale, lowers stock, then creates its financial receipt.
 create or replace function public.create_sale(p_customer_id uuid, p_items jsonb, p_payment_method text, p_idempotency_key text)
 returns uuid language plpgsql security definer set search_path = public as $$
-declare sale_id uuid; item jsonb; product_record public.products%rowtype; total_amount numeric := 0; line_amount numeric;
+declare sale_id uuid; item jsonb; product_record public.products%rowtype; total_amount numeric := 0; caller_role public.app_role; caller_member_id uuid;
 begin
+  caller_role := public.current_role();
+  if caller_role not in ('customer', 'admin') then raise exception 'Only customers and admins can create sales'; end if;
+  if caller_role = 'customer' then
+    select member_id into caller_member_id from public.profiles where id = auth.uid();
+    if caller_member_id is null then raise exception 'Customer account is not linked to a member'; end if;
+    if p_customer_id is null then p_customer_id := caller_member_id; end if;
+    if p_customer_id <> caller_member_id then raise exception 'Customer cannot create a sale for another member'; end if;
+  end if;
   if p_idempotency_key is not null and exists(select 1 from public.sales where idempotency_key = p_idempotency_key) then
     return (select id from public.sales where idempotency_key = p_idempotency_key);
   end if;
-  if jsonb_array_length(p_items) = 0 then raise exception 'Sale needs at least one item'; end if;
+  if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then raise exception 'Sale needs at least one item'; end if;
   for item in select * from jsonb_array_elements(p_items) loop
     select * into product_record from public.products where id = (item->>'product_id')::uuid and active = true for update;
     if not found then raise exception 'Product is not available'; end if;
@@ -152,6 +160,8 @@ begin
   insert into public.sales(customer_id,total,payment_method,idempotency_key) values(p_customer_id,total_amount,p_payment_method,p_idempotency_key) returning id into sale_id;
   for item in select * from jsonb_array_elements(p_items) loop
     select * into product_record from public.products where id = (item->>'product_id')::uuid for update;
+    if not found or not product_record.active then raise exception 'Product is not available'; end if;
+    if product_record.stock_quantity < (item->>'quantity')::integer then raise exception 'Insufficient stock for %', product_record.name; end if;
     insert into public.sale_items(sale_id,product_id,quantity,unit_price,unit_cost) values(sale_id,product_record.id,(item->>'quantity')::integer,product_record.sale_price,product_record.cost_price);
     update public.products set stock_quantity = stock_quantity - (item->>'quantity')::integer where id = product_record.id;
   end loop;
@@ -183,8 +193,16 @@ drop policy if exists admin_full_staff on public.staff; create policy admin_full
 drop policy if exists coach_own_staff on public.staff; create policy coach_own_staff on public.staff for select using (id = (select staff_id from public.profiles where id = auth.uid()));
 drop policy if exists admin_courses on public.courses; create policy admin_courses on public.courses for all using (public.is_admin()) with check (public.is_admin());
 drop policy if exists coach_courses on public.courses; create policy coach_courses on public.courses for select using (coach_id = (select staff_id from public.profiles where id = auth.uid()));
-drop policy if exists admin_finance on public.finance_movements; create policy admin_finance on public.finance_movements for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists admin_finance on public.finance_movements;
+drop policy if exists admin_finance_read on public.finance_movements; create policy admin_finance_read on public.finance_movements for select using (public.is_admin());
+drop policy if exists admin_finance_insert on public.finance_movements; create policy admin_finance_insert on public.finance_movements for insert with check (public.is_admin());
 drop policy if exists investor_finance_read on public.finance_movements; create policy investor_finance_read on public.finance_movements for select using (public.is_investor());
+drop policy if exists customer_subscriptions_read on public.subscriptions; create policy customer_subscriptions_read on public.subscriptions for select using (member_id = (select member_id from public.profiles where id = auth.uid()));
+drop policy if exists customer_payments_read on public.payments; create policy customer_payments_read on public.payments for select using (member_id = (select member_id from public.profiles where id = auth.uid()));
+drop policy if exists customer_invoices_read on public.invoices; create policy customer_invoices_read on public.invoices for select using (member_id = (select member_id from public.profiles where id = auth.uid()));
+drop policy if exists customer_progress_read on public.progress_logs; create policy customer_progress_read on public.progress_logs for select using (member_id = (select member_id from public.profiles where id = auth.uid()));
+drop policy if exists customer_measurements_read on public.measurements; create policy customer_measurements_read on public.measurements for select using (member_id = (select member_id from public.profiles where id = auth.uid()));
+drop policy if exists coach_course_subscriptions_read on public.subscriptions; create policy coach_course_subscriptions_read on public.subscriptions for select using (course_id in (select id from public.courses where coach_id = (select staff_id from public.profiles where id = auth.uid())));
 drop policy if exists investor_reports_read on public.profit_shares; create policy investor_reports_read on public.profit_shares for select using (public.is_investor() or public.is_admin());
 drop policy if exists investor_distributions_read on public.distributions; create policy investor_distributions_read on public.distributions for select using (public.is_investor() or public.is_admin());
 drop policy if exists investor_audit_read on public.audit_logs; create policy investor_audit_read on public.audit_logs for select using (public.is_investor() or public.is_admin());

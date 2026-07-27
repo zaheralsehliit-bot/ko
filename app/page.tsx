@@ -70,7 +70,7 @@ export default function Home() {
     const category = String(form.get("category") || "متفرقات");
     const method = String(form.get("method") || "نقدي");
     try {
-      const response = await fetch("/api/movements", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, accountName: person, category, amount: value, direction, paymentMethod: method }) });
+      const response = await fetch("/api/movements", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, accountName: person, category, amount: value, direction, paymentMethod: method, idempotencyKey: crypto.randomUUID() }) });
       if (!response.ok) throw new Error("save failed");
       const { movement } = await response.json();
       setMovements((items) => [{ id: movement.id, title, person, category, amount: value, direction, date: "الآن", method }, ...items]);
@@ -87,7 +87,7 @@ export default function Home() {
     const name = String(form.get("member") || "متدرب جديد");
     const amount = Number(form.get("amount")) || 180000;
     try {
-      const response = await fetch("/api/movements", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "تجديد اشتراك", accountName: name, category: "اشتراكات", amount, direction: "in", paymentMethod: "نقدي" }) });
+      const response = await fetch("/api/movements", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "تجديد اشتراك", accountName: name, category: "اشتراكات", amount, direction: "in", paymentMethod: "نقدي", idempotencyKey: crypto.randomUUID() }) });
       if (!response.ok) throw new Error("save failed");
       const { movement } = await response.json();
       setMovements((items) => [{ id: movement.id, title: "تجديد اشتراك", person: name, category: "اشتراكات", amount, direction: "in", date: "الآن", method: "نقدي" }, ...items]);

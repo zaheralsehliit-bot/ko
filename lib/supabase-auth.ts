@@ -30,6 +30,12 @@ export async function createAuthUser(email: string, password: string, fullName: 
   });
 }
 
+export async function deleteAuthUser(userId: string) {
+  const { url, secret } = runtime();
+  if (!secret) throw new Error("SUPABASE_SECRET_KEY is required to delete users.");
+  return fetch(`${url}/auth/v1/admin/users/${userId}`, { method: "DELETE", headers: { apikey: secret, Authorization: `Bearer ${secret}` } });
+}
+
 export function authCookie(token: string) {
   return `nadiak_access_token=${token}; Path=/; Max-Age=3600; HttpOnly; Secure; SameSite=Lax`;
 }

@@ -1,4 +1,5 @@
-import { assertWriteAccess, supabaseRest } from "../../../../lib/supabase-rest";
+import { assertWriteAccess, supabaseRest } from "@/lib/supabase-rest";
+import { requireRole } from "@/lib/request-auth";
 
 const tables = { members: "members", coaches: "staff", store: "products", assets: "assets", finance: "finance_movements", reports: "finance_movements", settings: "app_settings" } as const;
 type Section = keyof typeof tables;
@@ -12,38 +13,44 @@ function asRecord(section: Section, row: Record<string, unknown>) {
   if (section === "finance" || section === "reports") return { id: row.id, name: row.title, detail: `${row.account_name} · ${row.category}`, status: row.direction === "in" ? "دخل" : "مصروف", amount: row.amount };
   return { id: row.id, name: row.key, detail: String(row.value ?? ""), status: "نشط" };
 }
+function cleanText(value: unknown, max = 160) { return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, max) : ""; }
+function validAmount(value: unknown) { const amount = Number(value); return Number.isSafeInteger(amount) && amount >= 0 ? amount : null; }
 
-export async function GET(_request: Request, context: { params: Promise<{ section: string }> }) {
-  const { section: raw } = await context.params;
-  const section = sectionOf(raw);
+export async function GET(request: Request, context: { params: Promise<{ section: string }> }) {
+  const { section: raw } = await context.params; const section = sectionOf(raw);
   if (!section) return Response.json({ error: "قسم غير موجود" }, { status: 404 });
+  if (section !== "store") {
+    const allowed = section === "reports" ? ["admin", "investor"] as const : ["admin"] as const;
+    const auth = await requireRole(request, [...allowed]); if (auth.response) return auth.response;
+  }
   try {
-    const query = section === "reports" ? "finance_movements?select=*&order=occurred_at.desc" : `${tables[section]}?select=*&order=created_at.desc`;
-    const response = await supabaseRest(query);
-    if (!response.ok) throw new Error();
+    const query = section === "reports" ? "finance_movements?select=*&order=occurred_at.desc&limit=200" : section === "store" ? "products?select=*&active=eq.true&order=created_at.desc&limit=200" : `${tables[section]}?select=*&order=created_at.desc&limit=200`;
+    const response = await supabaseRest(query); if (!response.ok) throw new Error("read failed");
     const rows = await response.json() as Array<Record<string, unknown>>;
     return Response.json({ records: rows.map((row) => asRecord(section, row)) });
-  } catch { return Response.json({ records: [] }); }
+  } catch { return Response.json({ error: "تعذر تحميل السجلات حالياً." }, { status: 503 }); }
 }
 
 export async function POST(request: Request, context: { params: Promise<{ section: string }> }) {
-  const { section: raw } = await context.params;
-  const section = sectionOf(raw);
-  const data = await request.json() as { name?: string; detail?: string; amount?: number };
-  if (!section || !data.name) return Response.json({ error: "بيانات غير مكتملة" }, { status: 400 });
+  const { section: raw } = await context.params; const section = sectionOf(raw);
+  if (!section) return Response.json({ error: "قسم غير موجود" }, { status: 404 });
+  if (section === "reports") return Response.json({ error: "التقارير للقراءة فقط." }, { status: 405 });
+  const auth = await requireRole(request, ["admin"]); if (auth.response) return auth.response;
+  const data = await request.json().catch(() => null) as { name?: unknown; detail?: unknown; amount?: unknown } | null;
+  const name = cleanText(data?.name); const detail = cleanText(data?.detail, 300); const amount = validAmount(data?.amount);
+  if (!name || amount === null) return Response.json({ error: "تحقق من الاسم والمبلغ." }, { status: 400 });
   try {
     assertWriteAccess();
-    const amount = Math.round(Number(data.amount) || 0);
-    const payload: Record<string, unknown> = section === "members" ? { full_name: data.name, plan_name: data.detail || "باقة لياقة شهرية", training_schedule: "3 حصص أسبوعيًا", monthly_fee: amount, membership_status: "نشط" }
-      : section === "coaches" ? { full_name: data.name, job_title: data.detail || "كابتن", compensation_type: "راتب شهري", monthly_amount: amount, employment_status: "نشط" }
-      : section === "store" ? { name: data.name, description: data.detail || "منتج متجر", stock_quantity: 0, sale_price: amount, cost_price: 0 }
-      : section === "assets" ? { name: data.name, description: data.detail || "سجل جديد", asset_type: "مصروف", amount, status: "نشط" }
-      : section === "settings" ? { key: data.name, value: data.detail || "", description: "إعداد نادي" }
-      : { title: data.name, account_name: data.detail || "إدارة النادي", category: section === "reports" ? "تقرير" : "متفرقات", amount, direction: "in", payment_method: "نقدي" };
-    const table = tables[section];
-    const response = await supabaseRest(table, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(payload) });
-    if (!response.ok) throw new Error();
+    const payload: Record<string, unknown> = section === "members" ? { full_name: name, plan_name: detail || "باقة لياقة شهرية", training_schedule: "3 حصص أسبوعياً", monthly_fee: amount, membership_status: "نشط" }
+      : section === "coaches" ? { full_name: name, job_title: detail || "كابتن", compensation_type: "راتب شهري", monthly_amount: amount, employment_status: "نشط" }
+      : section === "store" ? { name, description: detail || "منتج متجر", stock_quantity: 0, sale_price: amount, cost_price: 0 }
+      : section === "assets" ? { name, description: detail || "سجل جديد", asset_type: "مصروف", amount, status: "نشط" }
+      : section === "settings" ? { key: name.toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 60), value: detail, description: "إعداد نادي" }
+      : { title: name, account_name: detail || "إدارة النادي", category: "متفرقات", amount, direction: "in", payment_method: "نقدي" };
+    const response = await supabaseRest(tables[section], { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(payload) });
+    if (!response.ok) throw new Error("write failed");
     const [row] = await response.json() as Array<Record<string, unknown>>;
+    await supabaseRest("audit_logs", { method: "POST", body: JSON.stringify({ actor_id: auth.session?.id, action: "create_record", entity_type: tables[section], entity_id: row.id, metadata: { section } }) });
     return Response.json({ record: asRecord(section, row) }, { status: 201 });
-  } catch { return Response.json({ error: "ربط Supabase غير مكتمل. أضف المفتاح السري كمتغير بيئة في الموقع." }, { status: 503 }); }
+  } catch { return Response.json({ error: "تعذر الحفظ. تحقق من إعدادات Supabase وصلاحيات الإدارة." }, { status: 503 }); }
 }

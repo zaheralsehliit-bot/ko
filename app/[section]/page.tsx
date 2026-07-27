@@ -26,16 +26,17 @@ export default function DetailPage() {
   const [modal, setModal] = useState(false);
   const [query, setQuery] = useState("");
   const [records, setRecords] = useState<RecordItem[]>(() => initialRecords(section));
+  const [recordsSection, setRecordsSection] = useState<SectionKey>(section);
 
-  const visibleRecords = useMemo(() => records.filter((record) => `${record.name} ${record.detail}`.includes(query)), [records, query]);
+  const visibleRecords = useMemo(() => (recordsSection === section ? records : initialRecords(section)).filter((record) => `${record.name} ${record.detail}`.includes(query)), [records, recordsSection, section, query]);
 
   useEffect(() => {
-    setRecords(initialRecords(section));
-    setQuery("");
+    let cancelled = false;
     fetch(`/api/records/${section}`)
       .then((response) => response.ok ? response.json() : null)
-      .then((data) => { if (data?.records?.length) setRecords(data.records); })
+      .then((data) => { if (!cancelled && data?.records?.length) { setRecords(data.records); setRecordsSection(section); } })
       .catch(() => undefined);
+    return () => { cancelled = true; };
   }, [section]);
 
   async function addRecord(event: FormEvent<HTMLFormElement>) {
@@ -49,6 +50,7 @@ export default function DetailPage() {
       if (!response.ok) throw new Error("save failed");
       const { record } = await response.json();
       setRecords((current) => [record, ...current]);
+      setRecordsSection(section);
       setModal(false);
       setNotice(`تمت إضافة ${name} وحفظها في قاعدة البيانات.`);
     } catch {

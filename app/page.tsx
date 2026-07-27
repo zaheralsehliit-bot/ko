@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type Movement = {
   id: number;
@@ -103,15 +104,15 @@ export default function Home() {
         <div className="brand"><span className="brand-mark">ن</span><span>ناديك<span className="brand-dot">.</span></span></div>
         <div className="club-switcher"><span className="club-icon">⌁</span><div><b>نادي القوة</b><small>الفرع الرئيسي</small></div><span className="chevron">⌄</span></div>
         <nav aria-label="التنقل الرئيسي">
-          <a className="nav-item active" href="#overview"><span>▦</span>نظرة عامة</a>
-          <a className="nav-item" href="#members"><span>♙</span>المتدربون <em>128</em></a>
-          <a className="nav-item" href="#finance"><span>◫</span>الحسابات والفواتير</a>
-          <a className="nav-item" href="#coaches"><span>♟</span>الكباتن والموظفون</a>
-          <a className="nav-item" href="#store"><span>▣</span>المتجر والمخزون</a>
-          <a className="nav-item" href="#assets"><span>◇</span>الأصول والمصروفات</a>
-          <a className="nav-item" href="#reports"><span>◔</span>تقارير المستثمر</a>
+          <Link className="nav-item active" href="/"><span>▦</span>نظرة عامة</Link>
+          <Link className="nav-item" href="/members"><span>♙</span>المتدربون <em>128</em></Link>
+          <Link className="nav-item" href="/finance"><span>◫</span>الحسابات والفواتير</Link>
+          <Link className="nav-item" href="/coaches"><span>♟</span>الكباتن والموظفون</Link>
+          <Link className="nav-item" href="/store"><span>▣</span>المتجر والمخزون</Link>
+          <Link className="nav-item" href="/assets"><span>◇</span>الأصول والمصروفات</Link>
+          <Link className="nav-item" href="/reports"><span>◔</span>تقارير المستثمر</Link>
         </nav>
-        <div className="sidebar-bottom"><a className="nav-item" href="#settings"><span>⚙</span>الإعدادات</a><div className="profile"><span className="avatar owner">ز</span><div><b>زاهر السهلي</b><small>المدير</small></div><span>⌄</span></div></div>
+        <div className="sidebar-bottom"><Link className="nav-item" href="/settings"><span>⚙</span>الإعدادات</Link><div className="profile"><span className="avatar owner">ز</span><div><b>زاهر السهلي</b><small>المدير</small></div><span>⌄</span></div></div>
       </aside>
 
       <section className="workspace">

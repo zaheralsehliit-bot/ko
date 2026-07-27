@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Movement = {
   id: number;
@@ -47,7 +47,17 @@ export default function Home() {
   );
   const accountBalance = selectedAccount.due - selectedAccount.paid;
 
-  function addMovement(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    fetch("/api/movements")
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (!data?.movements?.length) return;
+        setMovements(data.movements.map((item: { id: number; title: string; accountName: string; category: string; amount: number; direction: "in" | "out"; paymentMethod: string; createdAt: string }) => ({ id: item.id, title: item.title, person: item.accountName, category: item.category, amount: item.amount, direction: item.direction, date: item.createdAt, method: item.paymentMethod })));
+      })
+      .catch(() => undefined);
+  }, []);
+
+  async function addMovement(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const direction = form.get("direction") as "in" | "out";
@@ -56,19 +66,35 @@ export default function Home() {
     const person = String(form.get("person") || "إدارة النادي");
     if (!value || value < 1) return;
 
-    setMovements((items) => [{ id: Date.now(), title, person, category: String(form.get("category") || "متفرقات"), amount: value, direction, date: "الآن", method: String(form.get("method") || "نقدي") }, ...items]);
-    setShowMovementForm(false);
-    setNotice("تم تسجيل الحركة المالية وتحديث الرصيد فورًا.");
+    const category = String(form.get("category") || "متفرقات");
+    const method = String(form.get("method") || "نقدي");
+    try {
+      const response = await fetch("/api/movements", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, accountName: person, category, amount: value, direction, paymentMethod: method }) });
+      if (!response.ok) throw new Error("save failed");
+      const { movement } = await response.json();
+      setMovements((items) => [{ id: movement.id, title, person, category, amount: value, direction, date: "الآن", method }, ...items]);
+      setShowMovementForm(false);
+      setNotice("تم تسجيل الحركة المالية وحفظها في دفتر الحسابات.");
+    } catch {
+      setNotice("تعذر الحفظ الآن. تحقق من إعداد قاعدة البيانات ثم أعد المحاولة.");
+    }
   }
 
-  function renewSubscription(event: FormEvent<HTMLFormElement>) {
+  async function renewSubscription(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const name = String(form.get("member") || "متدرب جديد");
     const amount = Number(form.get("amount")) || 180000;
-    setMovements((items) => [{ id: Date.now(), title: "تجديد اشتراك", person: name, category: "اشتراكات", amount, direction: "in", date: "الآن", method: "نقدي" }, ...items]);
-    setShowRenewForm(false);
-    setNotice(`تم تجديد اشتراك ${name} وإضافة الفاتورة إلى الحسابات.`);
+    try {
+      const response = await fetch("/api/movements", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "تجديد اشتراك", accountName: name, category: "اشتراكات", amount, direction: "in", paymentMethod: "نقدي" }) });
+      if (!response.ok) throw new Error("save failed");
+      const { movement } = await response.json();
+      setMovements((items) => [{ id: movement.id, title: "تجديد اشتراك", person: name, category: "اشتراكات", amount, direction: "in", date: "الآن", method: "نقدي" }, ...items]);
+      setShowRenewForm(false);
+      setNotice(`تم تجديد اشتراك ${name} وإضافة الفاتورة إلى الحسابات.`);
+    } catch {
+      setNotice("تعذر حفظ التجديد الآن. تحقق من إعداد قاعدة البيانات ثم أعد المحاولة.");
+    }
   }
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
 const sections = {
@@ -15,7 +15,7 @@ const sections = {
 } as const;
 
 type SectionKey = keyof typeof sections;
-type RecordItem = { id: number; name: string; detail: string; status: string; amount?: number };
+type RecordItem = { id: number | string; name: string; detail: string; status: string; amount?: number };
 const arabicMoney = (value: number) => `${new Intl.NumberFormat("ar-SY").format(value)} ل.س`;
 
 export default function DetailPage() {
@@ -29,15 +29,31 @@ export default function DetailPage() {
 
   const visibleRecords = useMemo(() => records.filter((record) => `${record.name} ${record.detail}`.includes(query)), [records, query]);
 
-  function addRecord(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    setRecords(initialRecords(section));
+    setQuery("");
+    fetch(`/api/records/${section}`)
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (data?.records?.length) setRecords(data.records); })
+      .catch(() => undefined);
+  }, [section]);
+
+  async function addRecord(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") || "سجل جديد");
     const detail = String(form.get("detail") || defaultDetail(section));
     const amount = Number(form.get("amount")) || undefined;
-    setRecords((current) => [{ id: Date.now(), name, detail, amount, status: section === "members" ? "نشط" : "تم التسجيل" }, ...current]);
-    setModal(false);
-    setNotice(`تمت إضافة ${name} وتحديث صفحة ${copy.title}.`);
+    try {
+      const response = await fetch(`/api/records/${section}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, detail, amount }) });
+      if (!response.ok) throw new Error("save failed");
+      const { record } = await response.json();
+      setRecords((current) => [record, ...current]);
+      setModal(false);
+      setNotice(`تمت إضافة ${name} وحفظها في قاعدة البيانات.`);
+    } catch {
+      setNotice("يتطلب الحفظ تفعيل Supabase وإضافة مفتاح الخادم السري.");
+    }
   }
 
   return <main dir="rtl" className="app-shell detail-shell">
@@ -67,7 +83,7 @@ export default function DetailPage() {
       {section === "assets" && <AssetDetail setNotice={setNotice} />}
       {section === "reports" && <InvestorDetail setNotice={setNotice} />}
       {section === "settings" && <SettingsDetail setNotice={setNotice} />}
-      <article className="panel detail-table-panel"><div className="panel-heading"><div><h2>{tableTitle(section)}</h2><p>اختر أي سجل لمراجعة تفاصيله وإجراء العملية المناسبة.</p></div><label className="search-field"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="بحث سريع" /></label></div><div className="detail-table"><div className="detail-table-head"><span>السجل</span><span>التفاصيل</span><span>الحالة</span><span>القيمة</span><span /></div>{visibleRecords.map((record) => <div className="detail-table-row" key={record.id}><span><b>{record.name}</b><small>رقم #{record.id.toString().slice(-5)}</small></span><span>{record.detail}</span><span><i className="status-dot" />{record.status}</span><strong>{record.amount ? arabicMoney(record.amount) : "—"}</strong><button onClick={() => setNotice(`تم فتح ملف ${record.name} للمراجعة.`)}>عرض التفاصيل ‹</button></div>)}{visibleRecords.length === 0 && <p className="empty-state">لا توجد نتائج مطابقة للبحث.</p>}</div></article>
+      <article className="panel detail-table-panel"><div className="panel-heading"><div><h2>{tableTitle(section)}</h2><p>اختر أي سجل لمراجعة تفاصيله وإجراء العملية المناسبة.</p></div><label className="search-field"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="بحث سريع" /></label></div><div className="detail-table"><div className="detail-table-head"><span>السجل</span><span>التفاصيل</span><span>الحالة</span><span>القيمة</span><span /></div>{visibleRecords.map((record) => <div className="detail-table-row" key={record.id}><span><b>{record.name}</b><small>رقم #{String(record.id).slice(-5)}</small></span><span>{record.detail}</span><span><i className="status-dot" />{record.status}</span><strong>{record.amount ? arabicMoney(record.amount) : "—"}</strong><button onClick={() => setNotice(`تم فتح ملف ${record.name} للمراجعة.`)}>عرض التفاصيل ‹</button></div>)}{visibleRecords.length === 0 && <p className="empty-state">لا توجد نتائج مطابقة للبحث.</p>}</div></article>
     </div></section>
     {modal && <div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true"><button className="modal-close" onClick={() => setModal(false)}>×</button><form onSubmit={addRecord}><p className="eyebrow">{copy.title}</p><h2>{actionLabel(section)}</h2><label>{fieldLabel(section)}<input name="name" required placeholder={fieldPlaceholder(section)} /></label><label>تفاصيل إضافية<input name="detail" placeholder={defaultDetail(section)} /></label>{section !== "settings" && <label>القيمة / الراتب / الاشتراك<input name="amount" type="number" min="0" placeholder="0" /></label>}<button className="primary-button wide" type="submit">حفظ وتحديث السجل</button></form></section></div>}
   </main>;

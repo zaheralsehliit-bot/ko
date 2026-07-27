@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 type Movement = {
-  id: number;
+  id: number | string;
   title: string;
   person: string;
   category: string;

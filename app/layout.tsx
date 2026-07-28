@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./portal.css";
+import "./data-pages.css";
+import "./forms.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://nadiak-club-finance-2026.zaher-alsehli-it.chatgpt.site"),

@@ -114,6 +114,90 @@ alter table public.finance_movements add column if not exists source_id uuid;
 alter table public.finance_movements add column if not exists idempotency_key text;
 create unique index if not exists finance_movements_idempotency_key_idx on public.finance_movements (idempotency_key) where idempotency_key is not null;
 
+-- Complete, forward-compatible domain fields.
+alter table public.profiles add column if not exists phone text;
+alter table public.profiles add column if not exists avatar_url text;
+alter table public.profiles add column if not exists last_login_at timestamptz;
+alter table public.members add column if not exists member_code text unique;
+alter table public.members add column if not exists whatsapp text;
+alter table public.members add column if not exists gender text;
+alter table public.members add column if not exists birth_date date;
+alter table public.members add column if not exists address text;
+alter table public.members add column if not exists emergency_contact text;
+alter table public.members add column if not exists join_date date not null default current_date;
+alter table public.members add column if not exists avatar_url text;
+alter table public.members add column if not exists goals text;
+alter table public.members add column if not exists medical_note text;
+alter table public.members add column if not exists assigned_coach_id uuid references public.staff(id) on delete set null;
+alter table public.staff add column if not exists staff_code text unique;
+alter table public.staff add column if not exists phone text;
+alter table public.staff add column if not exists email text;
+alter table public.staff add column if not exists avatar_url text;
+alter table public.staff add column if not exists specialties text;
+alter table public.staff add column if not exists hire_date date;
+alter table public.staff add column if not exists notes text;
+alter table public.courses add column if not exists course_code text unique;
+alter table public.courses add column if not exists category text;
+alter table public.courses add column if not exists short_description text;
+alter table public.courses add column if not exists full_description text;
+alter table public.courses add column if not exists level text;
+alter table public.courses add column if not exists duration_days integer;
+alter table public.courses add column if not exists sessions_per_week integer;
+alter table public.courses add column if not exists start_date date;
+alter table public.courses add column if not exists end_date date;
+alter table public.courses add column if not exists cover_image_url text;
+
+create table if not exists public.course_sessions (
+  id uuid primary key default gen_random_uuid(), course_id uuid not null references public.courses(id) on delete cascade,
+  coach_id uuid references public.staff(id) on delete set null, day_of_week smallint not null check (day_of_week between 0 and 6),
+  start_time time not null, end_time time not null, room text, created_at timestamptz not null default now(), check (end_time > start_time)
+);
+create table if not exists public.attendance (
+  id uuid primary key default gen_random_uuid(), member_id uuid not null references public.members(id) on delete cascade,
+  course_id uuid not null references public.courses(id) on delete cascade, session_id uuid references public.course_sessions(id) on delete set null,
+  attended_at timestamptz not null default now(), status text not null default 'حاضر' check (status in ('حاضر','غائب','معتذر','متأخر')),
+  recorded_by uuid references public.profiles(id) on delete set null
+);
+create table if not exists public.member_notes (
+  id uuid primary key default gen_random_uuid(), member_id uuid not null references public.members(id) on delete cascade,
+  coach_id uuid references public.staff(id) on delete set null, note text not null, visibility text not null default 'coach' check (visibility in ('coach','admin')),
+  created_at timestamptz not null default now()
+);
+create table if not exists public.coach_payouts (
+  id uuid primary key default gen_random_uuid(), staff_id uuid not null references public.staff(id) on delete cascade,
+  amount numeric(14,2) not null check (amount > 0), method text not null default 'نقدي', paid_at timestamptz not null default now(),
+  finance_movement_id uuid references public.finance_movements(id) on delete set null, note text, created_at timestamptz not null default now()
+);
+create index if not exists attendance_member_idx on public.attendance(member_id, attended_at desc);
+create unique index if not exists attendance_session_day_unique_idx on public.attendance(member_id, session_id, ((attended_at at time zone 'UTC')::date)) where session_id is not null;
+create index if not exists course_sessions_course_idx on public.course_sessions(course_id, day_of_week);
+
+-- A renewal is one database transaction: subscription, invoice, payment, ledger and audit log succeed together.
+create or replace function public.renew_membership(p_member_id uuid, p_course_id uuid, p_end_date date, p_amount numeric, p_paid boolean, p_method text, p_idempotency_key text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare subscription_id uuid; invoice_id uuid; payment_id uuid; movement_id uuid;
+begin
+  if p_amount <= 0 or p_end_date < current_date then raise exception 'Invalid renewal values'; end if;
+  if p_idempotency_key is not null and exists(select 1 from public.payments where idempotency_key = p_idempotency_key) then
+    select subscription_id, invoice_id, id into subscription_id, invoice_id, payment_id from public.payments where idempotency_key = p_idempotency_key;
+    return jsonb_build_object('subscription_id',subscription_id,'invoice_id',invoice_id,'payment_id',payment_id,'idempotent',true);
+  end if;
+  insert into public.subscriptions(member_id, course_id, start_date, end_date, status, amount)
+  values(p_member_id, p_course_id, current_date, p_end_date, case when p_paid then 'نشط' else 'بانتظار الدفع' end, p_amount) returning id into subscription_id;
+  insert into public.invoices(member_id, title, total, status, due_date)
+  values(p_member_id, 'تجديد اشتراك', p_amount, case when p_paid then 'paid' else 'issued' end, current_date) returning id into invoice_id;
+  if p_paid then
+    insert into public.payments(member_id, subscription_id, invoice_id, amount, method, idempotency_key)
+    values(p_member_id, subscription_id, invoice_id, p_amount, coalesce(p_method,'نقدي'), p_idempotency_key) returning id into payment_id;
+    insert into public.finance_movements(title, account_name, category, amount, direction, payment_method, source_type, source_id, idempotency_key)
+    values('تجديد اشتراك','اشتراكات المتدربين','اشتراكات',p_amount,'in',coalesce(p_method,'نقدي'),'payment',payment_id,p_idempotency_key) returning id into movement_id;
+  end if;
+  update public.members set renewal_date = p_end_date, membership_status = case when p_paid then 'نشط' else 'بانتظار الدفع' end where id = p_member_id;
+  insert into public.audit_logs(actor_id, action, entity_type, entity_id, metadata)
+  values(null,'renew_membership','members',p_member_id,jsonb_build_object('subscription_id',subscription_id,'invoice_id',invoice_id,'payment_id',payment_id,'movement_id',movement_id));
+  return jsonb_build_object('subscription_id',subscription_id,'invoice_id',invoice_id,'payment_id',payment_id,'movement_id',movement_id,'idempotent',false);
+end; $$;
+
 create index if not exists finance_movements_occurred_at_idx on public.finance_movements (occurred_at desc);
 create index if not exists members_status_idx on public.members (membership_status);
 create index if not exists subscriptions_member_status_idx on public.subscriptions (member_id, status, end_date);
@@ -183,6 +267,7 @@ alter table public.payments enable row level security; alter table public.progre
 alter table public.products enable row level security; alter table public.sales enable row level security; alter table public.sale_items enable row level security;
 alter table public.assets enable row level security; alter table public.finance_movements enable row level security; alter table public.profit_shares enable row level security;
 alter table public.distributions enable row level security; alter table public.audit_logs enable row level security; alter table public.app_settings enable row level security;
+alter table public.course_sessions enable row level security; alter table public.attendance enable row level security; alter table public.member_notes enable row level security; alter table public.coach_payouts enable row level security;
 
 drop policy if exists product_catalog_read on public.products; create policy product_catalog_read on public.products for select using (active or public.is_admin());
 drop policy if exists own_profile_read on public.profiles; create policy own_profile_read on public.profiles for select using (id = auth.uid() or public.is_admin());
@@ -203,6 +288,17 @@ drop policy if exists customer_invoices_read on public.invoices; create policy c
 drop policy if exists customer_progress_read on public.progress_logs; create policy customer_progress_read on public.progress_logs for select using (member_id = (select member_id from public.profiles where id = auth.uid()));
 drop policy if exists customer_measurements_read on public.measurements; create policy customer_measurements_read on public.measurements for select using (member_id = (select member_id from public.profiles where id = auth.uid()));
 drop policy if exists coach_course_subscriptions_read on public.subscriptions; create policy coach_course_subscriptions_read on public.subscriptions for select using (course_id in (select id from public.courses where coach_id = (select staff_id from public.profiles where id = auth.uid())));
+drop policy if exists admin_all_subscriptions on public.subscriptions; create policy admin_all_subscriptions on public.subscriptions for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists admin_all_invoices on public.invoices; create policy admin_all_invoices on public.invoices for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists admin_all_payments on public.payments; create policy admin_all_payments on public.payments for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists admin_all_attendance on public.attendance; create policy admin_all_attendance on public.attendance for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists coach_attendance_write on public.attendance; create policy coach_attendance_write on public.attendance for all using (course_id in (select id from public.courses where coach_id = (select staff_id from public.profiles where id = auth.uid()))) with check (course_id in (select id from public.courses where coach_id = (select staff_id from public.profiles where id = auth.uid())));
+drop policy if exists admin_all_course_sessions on public.course_sessions; create policy admin_all_course_sessions on public.course_sessions for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists coach_course_sessions on public.course_sessions; create policy coach_course_sessions on public.course_sessions for select using (coach_id = (select staff_id from public.profiles where id = auth.uid()));
+drop policy if exists admin_all_member_notes on public.member_notes; create policy admin_all_member_notes on public.member_notes for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists coach_member_notes on public.member_notes; create policy coach_member_notes on public.member_notes for all using (coach_id = (select staff_id from public.profiles where id = auth.uid())) with check (coach_id = (select staff_id from public.profiles where id = auth.uid()));
+drop policy if exists admin_all_payouts on public.coach_payouts; create policy admin_all_payouts on public.coach_payouts for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists coach_own_payouts on public.coach_payouts; create policy coach_own_payouts on public.coach_payouts for select using (staff_id = (select staff_id from public.profiles where id = auth.uid()));
 drop policy if exists investor_reports_read on public.profit_shares; create policy investor_reports_read on public.profit_shares for select using (public.is_investor() or public.is_admin());
 drop policy if exists investor_distributions_read on public.distributions; create policy investor_distributions_read on public.distributions for select using (public.is_investor() or public.is_admin());
 drop policy if exists investor_audit_read on public.audit_logs; create policy investor_audit_read on public.audit_logs for select using (public.is_investor() or public.is_admin());

@@ -9,8 +9,9 @@ export async function GET() {
       supabaseRest("achievements?select=id,title,athlete_name,competition,achieved_at,image_url,description&published=eq.true&order=achieved_at.desc&limit=6"),
       supabaseRest("app_settings?select=key,value"),
     ]);
-    if (![coursesResponse, productsResponse, coachesResponse, achievementsResponse, settingsResponse].every(r => r.ok)) throw new Error();
-    const [courses, products, coaches, achievements, settings] = await Promise.all([coursesResponse.json(), productsResponse.json(), coachesResponse.json(), achievementsResponse.json(), settingsResponse.json()]);
+    if (![coursesResponse, productsResponse, coachesResponse, settingsResponse].every(r => r.ok)) throw new Error();
+    const [courses, products, coaches, settings] = await Promise.all([coursesResponse.json(), productsResponse.json(), coachesResponse.json(), settingsResponse.json()]);
+    const achievements = achievementsResponse.ok ? await achievementsResponse.json() : [];
     return Response.json({ courses, products, coaches, achievements, settings: Object.fromEntries((settings as Array<{ key: string; value: string }>).map(row => [row.key, row.value])) });
   } catch {
     return Response.json({ error: "تعذر تحميل بيانات نادي KO حالياً." }, { status: 503 });

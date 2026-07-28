@@ -172,6 +172,65 @@ create index if not exists attendance_member_idx on public.attendance(member_id,
 create unique index if not exists attendance_session_day_unique_idx on public.attendance(member_id, session_id, ((attended_at at time zone 'UTC')::date)) where session_id is not null;
 create index if not exists course_sessions_course_idx on public.course_sessions(course_id, day_of_week);
 
+-- KO public content, communications, and remote-learning extensions.
+alter table public.products add column if not exists sku text;
+alter table public.products add column if not exists category text;
+alter table public.products add column if not exists colors text[] not null default '{}';
+alter table public.products add column if not exists sizes text[] not null default '{}';
+alter table public.products add column if not exists low_stock_threshold integer not null default 10;
+
+create table if not exists public.achievements (
+  id uuid primary key default gen_random_uuid(), title text not null, athlete_name text, competition text,
+  description text, image_url text, achieved_at date not null default current_date, published boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.announcements (
+  id uuid primary key default gen_random_uuid(), title text not null, message text not null,
+  target_audience text not null default 'all_members', channels text[] not null default '{in_app}',
+  status text not null default 'draft' check (status in ('draft','scheduled','sent')),
+  scheduled_at timestamptz, sent_at timestamptz, created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.complaints (
+  id uuid primary key default gen_random_uuid(), reporter_id uuid references public.profiles(id) on delete set null,
+  reporter_name text, phone text, category text not null, priority text not null default 'normal', description text not null,
+  attachment_url text, anonymous boolean not null default false, status text not null default 'new' check (status in ('new','under_review','resolved','closed')),
+  admin_note text, resolved_at timestamptz, created_at timestamptz not null default now()
+);
+create table if not exists public.online_lessons (
+  id uuid primary key default gen_random_uuid(), title text not null, description text, coach_id uuid references public.staff(id) on delete set null,
+  level text, price numeric(14,2) not null default 0, video_url text, resource_url text, lesson_order integer not null default 1,
+  active boolean not null default true, created_at timestamptz not null default now()
+);
+create table if not exists public.consultations (
+  id uuid primary key default gen_random_uuid(), member_id uuid references public.members(id) on delete set null,
+  coach_id uuid references public.staff(id) on delete set null, consultation_type text not null, notes text,
+  starts_at timestamptz not null, meeting_url text, status text not null default 'requested' check (status in ('requested','confirmed','completed','cancelled')),
+  created_at timestamptz not null default now()
+);
+create table if not exists public.whatsapp_messages (
+  id uuid primary key default gen_random_uuid(), recipient_profile_id uuid references public.profiles(id) on delete set null,
+  recipient_phone text not null, body text not null, template_name text, status text not null default 'draft',
+  provider_message_id text, error_message text, created_by uuid references public.profiles(id) on delete set null,
+  sent_at timestamptz, created_at timestamptz not null default now()
+);
+
+alter table public.achievements enable row level security;
+alter table public.announcements enable row level security;
+alter table public.complaints enable row level security;
+alter table public.online_lessons enable row level security;
+alter table public.consultations enable row level security;
+alter table public.whatsapp_messages enable row level security;
+drop policy if exists public_achievements_read on public.achievements; create policy public_achievements_read on public.achievements for select using (published = true);
+drop policy if exists public_active_lessons_read on public.online_lessons; create policy public_active_lessons_read on public.online_lessons for select using (active = true and price = 0);
+drop policy if exists admin_achievements_manage on public.achievements; create policy admin_achievements_manage on public.achievements for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists admin_announcements_manage on public.announcements; create policy admin_announcements_manage on public.announcements for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists complaint_submit on public.complaints; create policy complaint_submit on public.complaints for insert with check (true);
+drop policy if exists admin_complaints_manage on public.complaints; create policy admin_complaints_manage on public.complaints for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists admin_online_lessons_manage on public.online_lessons; create policy admin_online_lessons_manage on public.online_lessons for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists own_consultations_read on public.consultations; create policy own_consultations_read on public.consultations for select using (member_id = (select member_id from public.profiles where id = auth.uid()) or coach_id = (select staff_id from public.profiles where id = auth.uid()) or public.is_admin());
+drop policy if exists own_whatsapp_messages_read on public.whatsapp_messages; create policy own_whatsapp_messages_read on public.whatsapp_messages for select using (public.is_admin());
+
 -- A renewal is one database transaction: subscription, invoice, payment, ledger and audit log succeed together.
 create or replace function public.renew_membership(p_member_id uuid, p_course_id uuid, p_end_date date, p_amount numeric, p_paid boolean, p_method text, p_idempotency_key text)
 returns jsonb language plpgsql security definer set search_path = public as $$

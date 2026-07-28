@@ -61,3 +61,14 @@ insert into public.profit_shares(recipient_name,recipient_role,share_percent,eff
 ('المستثمر الرئيسي','investor',50,current_date),('إدارة النادي','admin',25,current_date),('الكباتن والمبيعات','coach',25,current_date);
 insert into public.app_settings(key,value,description) values
 ('club_name','نادي القوة','اسم النادي على الفواتير'),('currency','ليرة سورية','عملة التقارير'),('auto_renewal_reminder_days','7','موعد تنبيه التجديد');
+
+-- KO public content extensions.
+insert into public.achievements(title,athlete_name,competition,description,achieved_at,published) values
+('ميدالية بطولة دمشق المفتوحة','فريق KO','بطولة دمشق للفنون القتالية','إنجاز جماعي يعكس التزام فريق KO بالتدريب والانضباط.',current_date - 80,true),
+('المركز الأول في تحدي القوة','محمد ديب','تحدي القوة المحلي','رقم شخصي جديد بعد برنامج قوة وتحمّل لمدة ثلاثة أشهر.',current_date - 43,true),
+('شهادة مدرب معتمد','فهد الأبطح','اعتماد تدريبي','تطوير مستمر لفريق التدريب في KO.',current_date - 15,true);
+insert into public.online_lessons(title,description,coach_id,level,price,lesson_order) values
+('أساسيات الإحماء القتالي','روتين قصير لتحضير الجسم قبل التدريب.',(select id from public.staff where staff_code='CO-001'),'مبتدئ',0,1),
+('تقنية الركلة الأمامية','شرح عملي للحركة والتوازن والتدرج.',(select id from public.staff where staff_code='CO-001'),'متوسط',0,2);
+insert into public.announcements(title,message,target_audience,channels,status,sent_at) values
+('انطلاق دورات KO الجديدة','تم فتح التسجيل للدورات الشهرية الجديدة. تواصل مع الاستقبال لحجز مقعدك.','all_members','{in_app,whatsapp}','sent',now());

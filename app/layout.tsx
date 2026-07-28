@@ -3,13 +3,14 @@ import "./globals.css";
 import "./portal.css";
 import "./data-pages.css";
 import "./forms.css";
+import "./ko.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://nadiak-club-finance-2026.zaher-alsehli-it.chatgpt.site"),
-  title: "ناديك | الإدارة المالية للنادي الرياضي",
-  description: "نظام احترافي لإدارة اشتراكات النادي، الحسابات، الكباتن، المبيعات، والمستثمرين.",
-  openGraph: { title: "ناديك | الإدارة المالية للنادي الرياضي", description: "كل حسابات ناديك في لوحة واحدة واضحة.", images: ["https://nadiak-club-finance-2026.zaher-alsehli-it.chatgpt.site/og.png"] },
-  twitter: { card: "summary_large_image", title: "ناديك | الإدارة المالية للنادي الرياضي", images: ["https://nadiak-club-finance-2026.zaher-alsehli-it.chatgpt.site/og.png"] },
+  title: "KO | نادي الفنون القتالية واللياقة",
+  description: "KO نادي الفنون القتالية والقوة واللياقة — تدريبات احترافية، دورات ومتجر رياضي.",
+  openGraph: { title: "KO | قوة منضبطة. مقاتل أقوى.", description: "منصة نادي KO للدورات الرياضية والمتجر وإدارة الأعضاء.", images: ["/og.png"] },
+  twitter: { card: "summary_large_image", title: "KO | نادي الفنون القتالية واللياقة", images: ["/og.png"] },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

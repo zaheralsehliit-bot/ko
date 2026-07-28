@@ -1,0 +1,6 @@
+"use client";
+/* eslint-disable @typescript-eslint/no-explicit-any, @next/next/no-img-element */
+import Image from "next/image";
+import Link from "next/link";
+import {useEffect,useState} from "react";
+export default function Achievements(){const[data,setData]=useState<any[]>([]);const[error,setError]=useState("");useEffect(()=>{fetch("/api/public/home").then(async r=>({ok:r.ok,data:await r.json()})).then(r=>r.ok?setData(r.data.achievements||[]):setError(r.data.error||"تعذر التحميل."))},[]);return <main className="ko-site"><header className="ko-nav"><Link href="/" className="ko-brand"><Image src="/ko-logo.png" alt="KO" width={48} height={48}/><span>KO<span>•</span></span></Link><Link className="ko-login" href="/">الرئيسية</Link></header><section className="ko-section"><p className="ko-kicker">KO ACHIEVEMENTS</p><h1 className="shop-ko-title">إنجازات تستحق أن تُروى.</h1>{error?<p className="ko-alert">{error}</p>:null}<div className="ko-achievements achievements-full">{data.map(item=><article key={item.id}>{item.image_url?<img src={item.image_url} alt={item.title}/>:null}<small>{new Date(item.achieved_at).toLocaleDateString("ar-SY")}</small><h3>{item.title}</h3><p>{item.athlete_name} · {item.competition}</p><p>{item.description}</p></article>)}</div>{!error&&data.length===0?<p className="ko-empty">لا توجد إنجازات منشورة حتى الآن.</p>:null}</section></main>}

@@ -215,6 +215,14 @@ create table if not exists public.whatsapp_messages (
   sent_at timestamptz, created_at timestamptz not null default now()
 );
 
+-- These helpers must exist before any RLS policy that references them. Keeping
+-- them here makes a fresh database bootstrap work as well as repeat migrations.
+create or replace function public.current_role() returns public.app_role language sql stable security definer set search_path = public as $$
+  select role from public.profiles where id = auth.uid() and active = true
+$$;
+create or replace function public.is_admin() returns boolean language sql stable security definer set search_path = public as $$ select public.current_role() = 'admin' $$;
+create or replace function public.is_investor() returns boolean language sql stable security definer set search_path = public as $$ select public.current_role() = 'investor' $$;
+
 alter table public.achievements enable row level security;
 alter table public.announcements enable row level security;
 alter table public.complaints enable row level security;
@@ -262,6 +270,113 @@ create index if not exists members_status_idx on public.members (membership_stat
 create index if not exists subscriptions_member_status_idx on public.subscriptions (member_id, status, end_date);
 create index if not exists sales_sold_at_idx on public.sales (sold_at desc);
 create index if not exists audit_logs_created_at_idx on public.audit_logs (created_at desc);
+
+-- Booking workflow: coaches propose availability, an administrator approves it, then
+-- members can reserve one or more seats. Capacity is enforced inside the RPC below
+-- while the availability row is locked, so concurrent requests cannot overbook a slot.
+create table if not exists public.coach_availability (
+  id uuid primary key default gen_random_uuid(),
+  coach_id uuid not null references public.staff(id) on delete cascade,
+  service_type text not null check (service_type in ('private_training','group_training','consultation','online_training')),
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  capacity integer not null default 1 check (capacity between 1 and 30),
+  price numeric(14,2) not null default 0 check (price >= 0),
+  meeting_url text,
+  status text not null default 'proposed' check (status in ('proposed','approved','rejected','cancelled')),
+  approval_note text,
+  approved_by uuid references public.profiles(id) on delete set null,
+  approved_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (ends_at > starts_at)
+);
+
+create table if not exists public.appointment_bookings (
+  id uuid primary key default gen_random_uuid(),
+  availability_id uuid not null references public.coach_availability(id) on delete restrict,
+  member_id uuid not null references public.members(id) on delete restrict,
+  party_size integer not null default 1 check (party_size between 1 and 10),
+  guest_names text[] not null default '{}',
+  notes text,
+  status text not null default 'confirmed' check (status in ('confirmed','cancelled','completed','no_show')),
+  cancelled_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (availability_id, member_id)
+);
+
+create table if not exists public.online_lesson_enrollments (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid not null references public.online_lessons(id) on delete cascade,
+  member_id uuid not null references public.members(id) on delete cascade,
+  status text not null default 'active' check (status in ('active','completed','cancelled')),
+  progress_percent integer not null default 0 check (progress_percent between 0 and 100),
+  enrolled_at timestamptz not null default now(),
+  completed_at timestamptz,
+  unique (lesson_id, member_id)
+);
+
+create index if not exists coach_availability_schedule_idx on public.coach_availability(coach_id, starts_at);
+create index if not exists coach_availability_public_idx on public.coach_availability(status, starts_at);
+create index if not exists appointment_bookings_slot_idx on public.appointment_bookings(availability_id, status);
+create index if not exists appointment_bookings_member_idx on public.appointment_bookings(member_id, created_at desc);
+
+-- A coach cannot publish or propose intersecting times. A group booking belongs
+-- in one slot with a larger capacity; it must not be represented by duplicates.
+create extension if not exists btree_gist;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'coach_availability_no_overlap') then
+    alter table public.coach_availability add constraint coach_availability_no_overlap
+      exclude using gist (coach_id with =, tstzrange(starts_at, ends_at, '[)') with &&)
+      where (status in ('proposed','approved'));
+  end if;
+end $$;
+
+alter table public.coach_availability enable row level security;
+alter table public.appointment_bookings enable row level security;
+alter table public.online_lesson_enrollments enable row level security;
+
+drop policy if exists public_approved_availability_read on public.coach_availability;
+create policy public_approved_availability_read on public.coach_availability for select using (status = 'approved' and starts_at > now());
+drop policy if exists own_booking_read on public.appointment_bookings;
+create policy own_booking_read on public.appointment_bookings for select using (member_id = (select member_id from public.profiles where id = auth.uid()) or public.is_admin());
+drop policy if exists own_lesson_enrollments_read on public.online_lesson_enrollments;
+create policy own_lesson_enrollments_read on public.online_lesson_enrollments for select using (member_id = (select member_id from public.profiles where id = auth.uid()) or public.is_admin());
+
+create or replace function public.book_coach_slot(
+  p_availability_id uuid,
+  p_member_id uuid,
+  p_party_size integer default 1,
+  p_guest_names text[] default '{}',
+  p_notes text default null
+)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_slot public.coach_availability%rowtype; v_reserved integer; v_booking public.appointment_bookings%rowtype;
+begin
+  if p_party_size < 1 or p_party_size > 10 then raise exception 'Invalid party size'; end if;
+  select * into v_slot from public.coach_availability where id = p_availability_id for update;
+  if not found then raise exception 'Slot not found'; end if;
+  if v_slot.status <> 'approved' or v_slot.starts_at <= now() then raise exception 'Slot is not available'; end if;
+  if p_party_size > v_slot.capacity then raise exception 'Party size exceeds slot capacity'; end if;
+  if exists(select 1 from public.appointment_bookings where availability_id = p_availability_id and member_id = p_member_id and status = 'confirmed') then
+    raise exception 'Member already has a booking for this slot';
+  end if;
+  select coalesce(sum(party_size), 0) into v_reserved from public.appointment_bookings where availability_id = p_availability_id and status = 'confirmed';
+  if v_reserved + p_party_size > v_slot.capacity then raise exception 'Slot is fully booked'; end if;
+  insert into public.appointment_bookings(availability_id,member_id,party_size,guest_names,notes)
+  values(p_availability_id,p_member_id,p_party_size,coalesce(p_guest_names,'{}'),nullif(p_notes,'')) returning * into v_booking;
+  if v_slot.service_type = 'consultation' then
+    insert into public.consultations(member_id,coach_id,consultation_type,notes,starts_at,status)
+    values(p_member_id,v_slot.coach_id,'scheduled',nullif(p_notes,''),v_slot.starts_at,'confirmed');
+  end if;
+  insert into public.audit_logs(actor_id, action, entity_type, entity_id, metadata)
+  values(null,'book_coach_slot','appointment_bookings',v_booking.id,jsonb_build_object('availability_id',p_availability_id,'member_id',p_member_id,'party_size',p_party_size));
+  return jsonb_build_object('id',v_booking.id,'availability_id',v_booking.availability_id,'status',v_booking.status);
+end; $$;
+
+revoke all on function public.book_coach_slot(uuid,uuid,integer,text[],text) from public;
+grant execute on function public.book_coach_slot(uuid,uuid,integer,text[],text) to service_role;
 
 -- Database-side guard: the active distribution model can never exceed 100%.
 create or replace function public.validate_profit_shares() returns trigger language plpgsql as $$

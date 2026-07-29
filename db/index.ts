@@ -1,27 +1,11 @@
-import { env } from "cloudflare:workers";
-import { drizzle } from "drizzle-orm/d1";
-import * as schema from "./schema";
-
-export function getDb() {
-  if (!env.DB) {
-    throw new Error(
-      "Cloudflare D1 binding `DB` is unavailable. Set the `d1` field in .openai/hosting.json to `DB` or let your control plane inject the real binding values before using the database."
-    );
-  }
-
-  return drizzle(env.DB, { schema });
+/**
+ * KO now persists data in Supabase. This compatibility module deliberately
+ * has no Cloudflare/D1 runtime dependency so standard Node hosts can build.
+ */
+export function getDb(): never {
+  throw new Error("قاعدة بيانات KO تستخدم Supabase؛ لا يتوفر اتصال D1 في هذه الاستضافة.");
 }
 
-export async function ensureFinanceSchema() {
-  if (!env.DB) throw new Error("Cloudflare D1 binding `DB` is unavailable.");
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS finance_movements (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    account_name TEXT NOT NULL,
-    category TEXT NOT NULL,
-    amount INTEGER NOT NULL,
-    direction TEXT NOT NULL,
-    payment_method TEXT NOT NULL DEFAULT 'نقدي',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`).run();
+export async function ensureFinanceSchema(): Promise<void> {
+  // The Supabase migration manages finance_movements atomically.
 }

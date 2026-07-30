@@ -23,7 +23,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const payload: Record<string, unknown> = {};
   const fields = ["name", "category", "short_description", "full_description", "level", "schedule", "status", "cover_image_url"] as const;
   for (const field of fields) { const value = text(body?.[field], field === "full_description" ? 4000 : 500); if (value) payload[field] = value; }
-  for (const field of ["monthly_price", "capacity", "duration_days", "sessions_per_week"] as const) { if (body?.[field] !== undefined) { const value = amount(body[field], field !== "monthly_price"); if (value === null) return Response.json({ error: "قيمة الدورة غير صالحة." }, { status: 400 }); payload[field] = value; } }
+  for (const field of ["monthly_price", "capacity", "duration_days", "sessions_per_week"] as const) { if (body?.[field] !== undefined) { const value = amount(body[field], field === "monthly_price"); if (value === null || (field !== "monthly_price" && value < 1)) return Response.json({ error: "قيمة الدورة غير صالحة." }, { status: 400 }); payload[field] = value; } }
   if (!Object.keys(payload).length) return Response.json({ error: "لا توجد تعديلات للحفظ." }, { status: 400 });
   try { assertWriteAccess(); const result = await supabaseRest(`courses?id=eq.${id}`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(payload) }); if (!result.ok) throw new Error(); const [course] = await result.json(); if (!course) return Response.json({ error: "الدورة غير موجودة." }, { status: 404 }); await audit(auth.session?.id, "update_course", "courses", id, payload); return Response.json({ course }); } catch { return Response.json({ error: "تعذر حفظ تعديلات الدورة." }, { status: 503 }); }
 }

@@ -10,6 +10,16 @@ type CalPayload = {
   createdAt?: string; timeZone?: string;
 };
 
+export function GET() {
+  const configured = Boolean(process.env.CAL_WEBHOOK_SECRET && process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY);
+  return Response.json({
+    service: "KO Fighters Cal.com webhook",
+    ready: configured,
+    method: "POST",
+    message: configured ? "Webhook endpoint is ready to receive signed Cal.com events." : "Add CAL_WEBHOOK_SECRET and Supabase server variables in Netlify before enabling this webhook.",
+  }, { status: configured ? 200 : 503, headers: { "Cache-Control": "no-store" } });
+}
+
 function safeEqual(signature: string | null, body: string, secret: string) {
   if (!signature) return false;
   const actual = signature.replace(/^sha256=/i, "");

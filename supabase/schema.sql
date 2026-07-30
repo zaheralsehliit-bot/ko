@@ -378,6 +378,38 @@ end; $$;
 revoke all on function public.book_coach_slot(uuid,uuid,integer,text[],text) from public;
 grant execute on function public.book_coach_slot(uuid,uuid,integer,text[],text) to service_role;
 
+-- Daily agenda notifications are durable records, not browser-only reminders.
+create table if not exists public.dashboard_notifications (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles(id) on delete cascade,
+  notification_type text not null,
+  title text not null,
+  body text not null,
+  action_url text,
+  related_booking_id uuid references public.appointment_bookings(id) on delete cascade,
+  read_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists dashboard_notifications_profile_idx on public.dashboard_notifications(profile_id, created_at desc);
+alter table public.dashboard_notifications enable row level security;
+drop policy if exists own_dashboard_notifications_read on public.dashboard_notifications;
+create policy own_dashboard_notifications_read on public.dashboard_notifications for select using (profile_id = auth.uid() or public.is_admin());
+
+create or replace function public.today_online_agenda(p_timezone text default 'Asia/Damascus', p_coach_id uuid default null)
+returns table(booking_id uuid, status text, notes text, party_size integer, created_at timestamptz, starts_at timestamptz, ends_at timestamptz, service_type text, meeting_url text, coach_id uuid, coach_name text, member_name text, member_phone text, member_whatsapp text) language sql stable security definer set search_path = public as $$
+  select b.id,b.status,b.notes,b.party_size,b.created_at,a.starts_at,a.ends_at,a.service_type,a.meeting_url,a.coach_id,s.full_name,m.full_name,m.phone,m.whatsapp
+  from public.appointment_bookings b
+  join public.coach_availability a on a.id=b.availability_id
+  join public.staff s on s.id=a.coach_id
+  join public.members m on m.id=b.member_id
+  where a.starts_at >= (date_trunc('day', now() at time zone p_timezone) at time zone p_timezone)
+    and a.starts_at < ((date_trunc('day', now() at time zone p_timezone) + interval '1 day') at time zone p_timezone)
+    and (p_coach_id is null or a.coach_id=p_coach_id)
+  order by a.starts_at asc
+$$;
+revoke all on function public.today_online_agenda(text,uuid) from public;
+grant execute on function public.today_online_agenda(text,uuid) to service_role;
+
 -- Database-side guard: the active distribution model can never exceed 100%.
 create or replace function public.validate_profit_shares() returns trigger language plpgsql as $$
 declare share_total numeric;

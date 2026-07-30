@@ -6,6 +6,7 @@ import "./forms.css";
 import "./ko.css";
 import "./booking.css";
 import "./responsive-fixes.css";
+import "./today.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://nadiak-club-finance-2026.zaher-alsehli-it.chatgpt.site"),

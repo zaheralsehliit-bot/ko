@@ -31,3 +31,15 @@ test("today agenda stays server-authorized and uses the configured club timezone
   assert.match(route, /rpc\/today_online_agenda/);
   assert.match(schema, /create or replace function public\.today_online_agenda\(p_timezone text default 'Asia\/Damascus'/);
 });
+
+test("hosted Cal.com integration does not trust unsigned bookings", async () => {
+  const webhook = await source("app/api/webhooks/cal/route.ts");
+  const page = await source("app/online-lessons/CalHostedBooker.tsx");
+  const schema = await source("supabase/schema.sql");
+  assert.match(page, /NEXT_PUBLIC_CAL_BOOKING_URL/);
+  assert.match(webhook, /x-cal-signature-256/);
+  assert.match(webhook, /createHmac\("sha256", secret\)/);
+  assert.match(webhook, /on_conflict=cal_uid/);
+  assert.match(schema, /create table if not exists public\.cal_booking_sync/);
+  assert.match(schema, /cal_uid text not null unique/);
+});

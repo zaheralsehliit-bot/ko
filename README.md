@@ -85,6 +85,42 @@ or enforce explicit server-side membership or allowlist checks.
 Use SIWC for account pages, user-specific dashboards, saved records, and write
 actions tied to the current ChatGPT user. Leave public content anonymous.
 
+## Cal.com hosted booking (KO Fighters)
+
+The public route `/online-lessons` uses a hosted Cal.com Event Type as the
+availability, Google Calendar and video-meeting engine. KO never generates a
+slot locally for this route.
+
+Set these deployment variables in Netlify (and locally when testing):
+
+```text
+NEXT_PUBLIC_CAL_BOOKING_URL=https://cal.com/<team-or-coach>/<event-type>
+CAL_WEBHOOK_SECRET=<the webhook secret configured in Cal.com>
+CAL_API_KEY=<optional server-only key for future Cal API actions>
+SUPABASE_URL=<project URL>
+SUPABASE_SECRET_KEY=<server-only Supabase secret>
+```
+
+1. In Cal.com, create one Event Type for each service/duration (for example
+   `online-training-30` and `online-training-60`) and enable its hosted Embed.
+2. Each coach connects Google Calendar and enables Google Meet in their Cal.com
+   availability/event settings. Configure the club timezone and session buffer
+   there: Cal.com is the source of truth for conflicts and double-booking.
+3. Add custom booking questions for WhatsApp/mobile, booking goal, notes and
+   consent. Mark mandatory questions as required in Cal.com.
+4. Create a Cal.com webhook to `https://<your-domain>/api/webhooks/cal`, add the
+   same `CAL_WEBHOOK_SECRET`, and subscribe to `BOOKING_CREATED`,
+   `BOOKING_RESCHEDULED`, `BOOKING_CANCELLED`, `BOOKING_REJECTED` and
+   `BOOKING_NO_SHOW_UPDATED`.
+5. Run the full `supabase/schema.sql` in the Supabase SQL editor before enabling
+   the webhook. It creates `cal_booking_sync`, protects it with RLS, and merges
+   hosted appointments into `/dashboard/today`.
+
+The webhook validates Cal.com's `x-cal-signature-256` HMAC before any write.
+It mirrors the Cal booking UID, attendee contact details, coach mapping (by
+coach staff email), date/time, status, meeting URL and cancellation history.
+Webhook retries are safe because `cal_uid` is unique and writes are upserts.
+
 ## Useful Commands
 
 - `npm run dev`: start local development

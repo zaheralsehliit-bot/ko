@@ -511,3 +511,59 @@ drop policy if exists investor_audit_read on public.audit_logs; create policy in
 
 revoke all on function public.create_sale(uuid,jsonb,text,text) from public;
 grant execute on function public.create_sale(uuid,jsonb,text,text) to authenticated;
+
+-- Cal.com is the source of truth for online availability, Google Calendar and Meet.
+-- KO stores an operational mirror only; no Cal secret is ever stored in this table.
+alter table public.members add column if not exists email text;
+create unique index if not exists members_email_unique_idx on public.members (lower(email)) where email is not null;
+create table if not exists public.cal_booking_sync (
+  id uuid primary key default gen_random_uuid(),
+  cal_uid text not null unique,
+  cal_event_type text,
+  cal_event_id text,
+  member_id uuid references public.members(id) on delete set null,
+  coach_id uuid references public.staff(id) on delete set null,
+  attendee_name text not null,
+  attendee_email text,
+  attendee_phone text,
+  booking_reason text,
+  notes text,
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  timezone text not null default 'Asia/Damascus',
+  status text not null default 'confirmed' check (status in ('confirmed','pending','cancelled','completed','no_show','rescheduled')),
+  meeting_url text,
+  calendar_event_url text,
+  cancel_url text,
+  reschedule_url text,
+  cancellation_reason text,
+  reschedule_history jsonb not null default '[]'::jsonb,
+  cal_created_at timestamptz,
+  last_webhook_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists cal_booking_sync_schedule_idx on public.cal_booking_sync(coach_id, starts_at);
+create index if not exists cal_booking_sync_member_idx on public.cal_booking_sync(member_id, starts_at desc);
+alter table public.cal_booking_sync enable row level security;
+drop policy if exists cal_booking_sync_admin_read on public.cal_booking_sync;
+create policy cal_booking_sync_admin_read on public.cal_booking_sync for select using (public.is_admin());
+drop policy if exists cal_booking_sync_coach_read on public.cal_booking_sync;
+create policy cal_booking_sync_coach_read on public.cal_booking_sync for select using (coach_id = (select staff_id from public.profiles where id = auth.uid()));
+drop policy if exists cal_booking_sync_member_read on public.cal_booking_sync;
+create policy cal_booking_sync_member_read on public.cal_booking_sync for select using (member_id = (select member_id from public.profiles where id = auth.uid()));
+
+-- One agenda endpoint combines legacy club bookings with hosted Cal.com bookings.
+create or replace function public.today_online_agenda(p_timezone text default 'Asia/Damascus', p_coach_id uuid default null)
+returns table(booking_id uuid, status text, notes text, party_size integer, created_at timestamptz, starts_at timestamptz, ends_at timestamptz, service_type text, meeting_url text, coach_id uuid, coach_name text, member_name text, member_phone text, member_whatsapp text, booking_source text) language sql stable security definer set search_path = public as $$
+  select b.id,b.status,b.notes,b.party_size,b.created_at,a.starts_at,a.ends_at,a.service_type,a.meeting_url,a.coach_id,s.full_name,m.full_name,m.phone,m.whatsapp,'club'
+  from public.appointment_bookings b join public.coach_availability a on a.id=b.availability_id join public.staff s on s.id=a.coach_id join public.members m on m.id=b.member_id
+  where a.starts_at >= (date_trunc('day', now() at time zone p_timezone) at time zone p_timezone) and a.starts_at < ((date_trunc('day', now() at time zone p_timezone) + interval '1 day') at time zone p_timezone) and (p_coach_id is null or a.coach_id=p_coach_id)
+  union all
+  select c.id,c.status,c.notes,1,c.created_at,c.starts_at,c.ends_at,coalesce(c.cal_event_type,'online_training'),c.meeting_url,c.coach_id,coalesce(s.full_name,'كوتش KO'),c.attendee_name,c.attendee_phone,c.attendee_phone,'cal'
+  from public.cal_booking_sync c left join public.staff s on s.id=c.coach_id
+  where c.starts_at >= (date_trunc('day', now() at time zone p_timezone) at time zone p_timezone) and c.starts_at < ((date_trunc('day', now() at time zone p_timezone) + interval '1 day') at time zone p_timezone) and (p_coach_id is null or c.coach_id=p_coach_id)
+  order by 6 asc
+$$;
+revoke all on function public.today_online_agenda(text,uuid) from public;
+grant execute on function public.today_online_agenda(text,uuid) to service_role;

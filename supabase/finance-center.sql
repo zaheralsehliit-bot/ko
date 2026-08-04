@@ -144,6 +144,33 @@ alter table public.invoices add column if not exists course_id uuid references p
 alter table public.invoices add column if not exists discount_amount numeric(14,2) not null default 0 check (discount_amount >= 0);
 alter table public.invoices add column if not exists refunded_amount numeric(14,2) not null default 0 check (refunded_amount >= 0);
 
+-- Keep the legacy renewal workflow atomic while preserving the course and
+-- subscription relationship required by the Finance Center.
+create or replace function public.renew_membership(p_member_id uuid, p_course_id uuid, p_end_date date, p_amount numeric, p_paid boolean, p_method text, p_idempotency_key text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare subscription_id uuid; invoice_id uuid; payment_id uuid; movement_id uuid;
+begin
+  if p_amount <= 0 or p_end_date < current_date then raise exception 'Invalid renewal values'; end if;
+  if p_idempotency_key is not null and exists(select 1 from public.payments where idempotency_key = p_idempotency_key) then
+    select subscription_id, invoice_id, id into subscription_id, invoice_id, payment_id from public.payments where idempotency_key = p_idempotency_key;
+    return jsonb_build_object('subscription_id',subscription_id,'invoice_id',invoice_id,'payment_id',payment_id,'idempotent',true);
+  end if;
+  insert into public.subscriptions(member_id,course_id,start_date,end_date,status,amount)
+    values(p_member_id,p_course_id,current_date,p_end_date,case when p_paid then 'نشط' else 'بانتظار الدفع' end,p_amount) returning id into subscription_id;
+  insert into public.invoices(member_id,subscription_id,course_id,title,total,status,due_date)
+    values(p_member_id,subscription_id,p_course_id,'Membership renewal',p_amount,case when p_paid then 'paid' else 'issued' end,current_date) returning id into invoice_id;
+  if p_paid then
+    insert into public.payments(member_id,subscription_id,invoice_id,amount,method,idempotency_key)
+      values(p_member_id,subscription_id,invoice_id,p_amount,coalesce(p_method,'cash'),p_idempotency_key) returning id into payment_id;
+    insert into public.finance_movements(title,account_name,category,amount,direction,payment_method,source_type,source_id,idempotency_key)
+      values('Membership renewal','Member subscriptions','subscriptions',p_amount,'in',coalesce(p_method,'cash'),'payment',payment_id,p_idempotency_key) returning id into movement_id;
+  end if;
+  update public.members set renewal_date=p_end_date,membership_status=case when p_paid then 'نشط' else 'بانتظار الدفع' end where id=p_member_id;
+  insert into public.audit_logs(actor_id,action,entity_type,entity_id,metadata)
+    values(null,'renew_membership','members',p_member_id,jsonb_build_object('subscription_id',subscription_id,'invoice_id',invoice_id,'payment_id',payment_id,'movement_id',movement_id));
+  return jsonb_build_object('subscription_id',subscription_id,'invoice_id',invoice_id,'payment_id',payment_id,'movement_id',movement_id,'idempotent',false);
+end $$;
+
 create index if not exists financial_vouchers_occurred_idx on public.financial_vouchers(occurred_at desc, status);
 create index if not exists financial_vouchers_course_idx on public.financial_vouchers(course_id, occurred_at desc);
 create index if not exists commission_entries_coach_idx on public.coach_commission_entries(coach_id, status);

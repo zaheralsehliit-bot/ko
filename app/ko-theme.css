@@ -139,5 +139,9 @@ input::placeholder, textarea::placeholder { color: var(--ko-subtle); }
 .portal-actions a span, .portal-actions span, .shop-header nav a, .shop-header nav b, .shop-products small { color: var(--ko-accent-strong) !important; }
 .shop-header nav b { background: var(--ko-accent) !important; color: var(--ko-ink) !important; }
 .shop-products button { background: var(--ko-accent-soft) !important; color: var(--ko-ink) !important; }
+.member-row-actions { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.member-row-actions .secondary-button { padding: 7px 10px; font-size: 11px; }
+.check-field { display: flex !important; align-items: center; gap: 8px; font-size: 12px; }
+.check-field input { min-height: auto; width: auto; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }

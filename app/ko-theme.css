@@ -1,0 +1,143 @@
+/* KO Fighters design system — loaded last so all existing routes share one identity. */
+:root {
+  --ko-ink: #1d1d18;
+  --ko-ink-strong: #12130f;
+  --ko-text: #35342d;
+  --ko-muted: #716e63;
+  --ko-subtle: #9b978b;
+  --ko-page: #f5f1e8;
+  --ko-surface: #fffdf8;
+  --ko-surface-muted: #eee7d8;
+  --ko-surface-strong: #e2d6be;
+  --ko-line: #ddd3c1;
+  --ko-line-strong: #cbbda4;
+  --ko-primary: #1d1d18;
+  --ko-primary-hover: #34342d;
+  --ko-primary-contrast: #fffdf8;
+  --ko-accent: #b99b61;
+  --ko-accent-strong: #8c713e;
+  --ko-accent-soft: #f1e6ce;
+  --ko-success: #24734f;
+  --ko-success-soft: #e6f2ea;
+  --ko-warning: #9a681f;
+  --ko-warning-soft: #fbefd7;
+  --ko-danger: #b63e32;
+  --ko-danger-hover: #923127;
+  --ko-danger-soft: #f9e8e5;
+  --ko-focus: #b99b61;
+  --ko-radius-sm: 8px;
+  --ko-radius: 12px;
+  --ko-radius-lg: 18px;
+  --ko-space-1: 4px;
+  --ko-space-2: 8px;
+  --ko-space-3: 12px;
+  --ko-space-4: 16px;
+  --ko-space-5: 24px;
+  --ko-shadow: 0 12px 28px rgb(29 29 24 / 8%);
+  --ko-shadow-raised: 0 22px 50px rgb(29 29 24 / 16%);
+  --ko-shadow-color: rgb(29 29 24 / 12%);
+  --ko-on-dark-muted: rgb(255 253 248 / 76%);
+  --ko-on-dark-line: rgb(255 253 248 / 18%);
+  --ko-on-dark-line-subtle: rgb(255 253 248 / 14%);
+  --ko-accent-overlay: rgb(185 155 97 / 20%);
+  --ko-surface-glass: rgb(255 253 248 / 92%);
+  --ko-nav-glass: rgb(255 253 248 / 96%);
+  --ko-overlay: rgb(18 19 15 / 70%);
+  --ink: var(--ko-ink);
+  --muted: var(--ko-muted);
+  --line: var(--ko-line);
+  --panel: var(--ko-surface);
+  --page: var(--ko-page);
+  --primary: var(--ko-primary);
+}
+
+/* Shared interaction and form primitives */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid var(--ko-focus) !important;
+  outline-offset: 2px;
+}
+button:disabled, [aria-disabled="true"] { cursor: not-allowed; opacity: .55; }
+input, select, textarea { border-color: var(--ko-line) !important; background: var(--ko-surface) !important; color: var(--ko-ink) !important; }
+input::placeholder, textarea::placeholder { color: var(--ko-subtle); }
+
+/* Admin shell, data modules, tables, filters, and dialogs */
+.app-shell, .portal-page, .schedule-page, .today-page, .shop-page { background: var(--ko-page) !important; color: var(--ko-ink) !important; }
+.sidebar, .ko-dashboard .sidebar { background: var(--ko-ink-strong) !important; border-color: var(--ko-on-dark-line-subtle) !important; }
+.brand, .ko-dashboard .brand, .ko-dashboard .brand-mark, .ko-dashboard .club-switcher, .ko-dashboard .sidebar-bottom .profile { color: var(--ko-primary-contrast) !important; }
+.brand-mark, .ko-dashboard .brand-mark { background: var(--ko-accent) !important; color: var(--ko-ink-strong) !important; box-shadow: none !important; }
+.brand-dot, .eyebrow, .ko-dashboard .eyebrow, .ko-kicker { color: var(--ko-accent-strong) !important; }
+.nav-item, .ko-dashboard .nav-item { color: var(--ko-on-dark-muted) !important; }
+.nav-item span, .ko-dashboard .nav-item span, .chevron { color: var(--ko-accent) !important; }
+.nav-item:hover, .nav-item.active, .ko-dashboard .nav-item.active { background: var(--ko-accent-overlay) !important; color: var(--ko-primary-contrast) !important; }
+.nav-item.active { box-shadow: inset 3px 0 0 var(--ko-accent); }
+.club-switcher, .ko-dashboard .club-switcher, .profile, .ko-dashboard .sidebar-bottom .profile { border-color: var(--ko-on-dark-line) !important; }
+.club-switcher .club-icon, .ko-dashboard .club-icon { background: var(--ko-accent) !important; color: var(--ko-ink-strong) !important; }
+.topbar, .ko-dashboard .topbar { background: var(--ko-surface-glass) !important; border-color: var(--ko-line) !important; }
+.portal-link, .data-table a, .detail-link, .panel-heading a, .text-button, .breadcrumb a, .member-top>a { color: var(--ko-accent-strong) !important; }
+.date-chip, .circle-button, .secondary-button { background: var(--ko-surface) !important; border-color: var(--ko-line) !important; color: var(--ko-text) !important; }
+.date-chip:hover, .circle-button:hover, .secondary-button:hover { border-color: var(--ko-accent) !important; background: var(--ko-accent-soft) !important; }
+.primary-button, .schedule-form button, .schedule-slots button, .booking-slot button, .online-card button { background: var(--ko-primary) !important; color: var(--ko-primary-contrast) !important; border-color: var(--ko-primary) !important; box-shadow: none !important; }
+.primary-button:hover, .schedule-form button:hover, .schedule-slots button:hover, .booking-slot button:hover, .online-card button:hover { background: var(--ko-primary-hover) !important; }
+.schedule-slots .reject, .ko-btn.primary.destructive, .danger-button { background: var(--ko-danger) !important; border-color: var(--ko-danger) !important; color: var(--ko-primary-contrast) !important; }
+.schedule-slots .reject:hover, .ko-btn.primary.destructive:hover, .danger-button:hover { background: var(--ko-danger-hover) !important; }
+.panel, .metric-card, .portal-stats article, .portal-panel, .today-cards article, .next-appointment, .today-item, .schedule-form, .schedule-slots article, .shop-products article, .member-profile-summary article { background: var(--ko-surface) !important; border-color: var(--ko-line) !important; box-shadow: var(--ko-shadow) !important; }
+.panel:hover, .metric-card:hover, .portal-stats article:hover, .shop-products article:hover { border-color: var(--ko-line-strong) !important; }
+.data-table th, .table-head, .detail-table-head, .invoice-cards span, .schedule-grid span, .data-toolbar input, .data-toolbar select, .search-field { background: var(--ko-surface-muted) !important; color: var(--ko-muted) !important; border-color: var(--ko-line) !important; }
+.data-table td, .data-list>div, .movement-row, .member-row, .account-row, .product-row, .audit-list span, .info-lines span, .payment-list>span, .progress-log span { border-color: var(--ko-line) !important; color: var(--ko-text) !important; }
+.data-table td b, .data-list b, .info-lines b, .coach-money b, .data-table td b { color: var(--ko-ink) !important; }
+.data-table td small, .data-list small, .subhead, .panel-heading p, .account-note, .data-table th, .metric-label, .metric-card p, .portal-stats small, .portal-stats span { color: var(--ko-muted) !important; }
+.metric-icon.accent, .metric-icon.amber, .investor-icon, .soft-icon, .avatar.accent, .avatar.neutral, .avatar.orange, .product-icon { background: var(--ko-accent-soft) !important; color: var(--ko-accent-strong) !important; }
+.avatar { background: var(--ko-surface-strong) !important; color: var(--ko-ink) !important; }
+.avatar.owner { background: var(--ko-primary) !important; color: var(--ko-primary-contrast) !important; }
+.avatar.mint, .metric-icon.green { background: var(--ko-success-soft) !important; color: var(--ko-success) !important; }
+.avatar.danger, .metric-icon.danger { background: var(--ko-danger-soft) !important; color: var(--ko-danger) !important; }
+.status-badge, .notice, .portal-message, .schedule-message { background: var(--ko-success-soft) !important; color: var(--ko-success) !important; border-color: var(--ko-success) !important; }
+.warning-badge, .today-item.soon { background: var(--ko-warning-soft) !important; color: var(--ko-warning) !important; border-color: var(--ko-warning) !important; }
+.error-state, .form-error, .today-item.overdue { background: var(--ko-danger-soft) !important; color: var(--ko-danger) !important; border-color: var(--ko-danger) !important; }
+.positive, .green-text, .stock-ok, .movement-row>strong.in, .product-row strong, .detail-table-row strong, .payment-list b, .subscription-status b { color: var(--ko-success) !important; }
+.orange-text { color: var(--ko-warning) !important; }
+.profile-hero, .class-card, .subscription-card, .profile-note, .account-row.selected { background: var(--ko-accent-soft) !important; border-color: var(--ko-line-strong) !important; }
+.profile-tabs button.active, .profile-tabs-data button.active { color: var(--ko-ink) !important; border-color: var(--ko-accent) !important; }
+.quick-actions button, .member-row button, .payment-list button, .detail-table-row button, .detail-row-action { background: var(--ko-accent-soft) !important; color: var(--ko-ink) !important; border-color: var(--ko-line-strong) !important; }
+.quick-actions button:hover, .member-row button:hover, .payment-list button:hover, .detail-table-row button:hover, .detail-row-action:hover { background: var(--ko-surface-strong) !important; }
+.modal-backdrop, .booking-modal { background: var(--ko-overlay) !important; }
+.modal, .booking-modal form { background: var(--ko-surface) !important; box-shadow: var(--ko-shadow-raised) !important; }
+.modal-close { background: var(--ko-surface-muted) !important; color: var(--ko-ink) !important; }
+.data-state, .today-empty, .booking-empty { background: var(--ko-surface) !important; border-color: var(--ko-line-strong) !important; color: var(--ko-muted) !important; }
+.loader { border-color: var(--ko-surface-strong) !important; border-top-color: var(--ko-accent-strong) !important; }
+
+/* Public pages and Cal booking retain the same dark / cream KO identity. */
+.ko-site, .cal-page { background: var(--ko-page) !important; color: var(--ko-ink) !important; }
+.ko-nav { background: var(--ko-nav-glass) !important; border-color: var(--ko-line) !important; }
+.ko-nav nav a:hover, .ko-section-head>a, .intro>a, .online-card a { color: var(--ko-accent-strong) !important; }
+.ko-login { border-color: var(--ko-ink) !important; color: var(--ko-ink) !important; }
+.ko-login:hover { background: var(--ko-ink) !important; color: var(--ko-primary-contrast) !important; }
+.ko-hero, .booking-hero, .cal-brand-panel, .login-hero { background: linear-gradient(135deg, var(--ko-ink-strong), var(--ko-ink)) !important; }
+.ko-hero h1 em, .booking-hero h1 em, .cal-brand-panel h1 em { color: var(--ko-accent) !important; }
+.ko-kicker { color: var(--ko-accent) !important; }
+.ko-btn.primary, .cal-config-empty a { background: var(--ko-primary) !important; color: var(--ko-primary-contrast) !important; }
+.ko-btn.primary:hover, .cal-config-empty a:hover { background: var(--ko-primary-hover) !important; }
+.ko-btn.cream { background: var(--ko-accent) !important; color: var(--ko-ink) !important; }
+.ko-card-grid > *, .ko-product, .ko-coach, .booking-slot, .online-card, .cal-frame-panel { background: var(--ko-surface) !important; border-color: var(--ko-line) !important; }
+.ko-course-mark, .course-detail-public>aside { background: var(--ko-ink) !important; color: var(--ko-accent) !important; }
+.ko-course small, .ko-product small, .booking-slot small, .online-card small, .cal-frame-heading p { color: var(--ko-accent-strong) !important; }
+.ko-course footer b, .ko-product b, .course-detail-public>div>b, .product-detail b, .booking-slot>div b, .online-card b { color: var(--ko-accent-strong) !important; }
+.ko-coaches, .course-time, .shop-hero { background: var(--ko-surface-strong) !important; }
+.ko-banner { background: var(--ko-ink) !important; }
+.ko-alert, .booking-message { background: var(--ko-danger-soft) !important; color: var(--ko-danger) !important; border-color: var(--ko-danger) !important; }
+.booking-tabs button { background: var(--ko-surface) !important; border-color: var(--ko-line) !important; color: var(--ko-text) !important; }
+.booking-tabs button.active { background: var(--ko-primary) !important; border-color: var(--ko-primary) !important; color: var(--ko-primary-contrast) !important; }
+.booking-slot button:disabled { background: var(--ko-surface-strong) !important; border-color: var(--ko-surface-strong) !important; color: var(--ko-muted) !important; }
+.cal-frame-panel, .cal-loading { background: var(--ko-surface) !important; border-color: var(--ko-line) !important; }
+.cal-frame-heading { border-color: var(--ko-line) !important; }
+
+/* Role portals and storefront */
+.portal-top, .shop-header { border-color: var(--ko-line) !important; }
+.portal-top button, .shop-header nav button { background: var(--ko-surface) !important; border-color: var(--ko-line) !important; color: var(--ko-text) !important; }
+.portal-actions a, .portal-actions button { background: var(--ko-surface) !important; border-color: var(--ko-line) !important; color: var(--ko-text) !important; }
+.portal-actions a:hover, .portal-actions button:hover { background: var(--ko-accent-soft) !important; border-color: var(--ko-accent) !important; color: var(--ko-ink) !important; }
+.portal-actions a span, .portal-actions span, .shop-header nav a, .shop-header nav b, .shop-products small { color: var(--ko-accent-strong) !important; }
+.shop-header nav b { background: var(--ko-accent) !important; color: var(--ko-ink) !important; }
+.shop-products button { background: var(--ko-accent-soft) !important; color: var(--ko-ink) !important; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }

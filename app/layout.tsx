@@ -8,6 +8,7 @@ import "./booking.css";
 import "./responsive-fixes.css";
 import "./today.css";
 import "./ko-theme.css";
+import "./finance-center.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://kofighter.netlify.app"),

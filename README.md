@@ -121,6 +121,36 @@ It mirrors the Cal booking UID, attendee contact details, coach mapping (by
 coach staff email), date/time, status, meeting URL and cancellation history.
 Webhook retries are safe because `cal_uid` is unique and writes are upserts.
 
+## KO Finance Center
+
+Run `supabase/schema.sql` first, then run `supabase/finance-center.sql` in the
+Supabase SQL editor. The migration is additive and rerunnable: it preserves the
+existing invoices, payments, finance movements, payouts, and distributions.
+
+The Finance Center is available at `/dashboard/finance`, with sections for
+transactions, accounts, courses, coaches, partners, reports, rules, and
+printable vouchers. Server routes enforce admin, coach, and investor scopes;
+only an admin can create, reverse, or pay a financial obligation.
+
+For a development or demo database only, run the guarded seed in the same SQL
+session:
+
+```sql
+set app.ko_demo_seed = 'true';
+-- then run supabase/finance-demo.sql
+```
+
+The seed intentionally refuses to run without that flag. It creates 90 days of
+course payments, an example refund, operating expenses, a partner-paid expense,
+and a closed cash day. Never enable this setting in production.
+
+Financial formula: `gross income - refunds - accrued coach commissions - approved
+operating expenses = positive distributable net profit`. The active partner
+rules allocate that final positive amount as 45% Dr Abdul Hakim, 10% Zaher, and
+45% Coach Fahd. Coach commissions are stored independently at the payment-time
+percentage snapshot (50% by default), so Fahd's coaching income is never mixed
+with his partner distribution.
+
 ## Useful Commands
 
 - `npm run dev`: start local development
